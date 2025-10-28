@@ -61,47 +61,28 @@ class UserService(hello_pb2_grpc.UserServiceServicer):
             return hello_pb2.UserReply(message=f"Error: {e}")
         finally:
             self._put_conn(conn)
-    
+
     def GetUser(self, request, context):
         """Obtener usuario por ID"""
         conn = self._get_conn()
         try:
             cur = conn.cursor()
-            # Si request.id == 0 -> listar todos los usuarios
-            if getattr(request, 'id', 0) == 0:
-                cur.execute("SELECT id, name, email FROM users ORDER BY id")
-                rows = cur.fetchall()
-                cur.close()
-                # Construir lista de usuarios como texto (JSON simple)
-                try:
-                    import json
-                    users = [{"id": r[0], "name": r[1], "email": r[2]} for r in rows]
-                    return hello_pb2.UserReply(message=json.dumps(users, ensure_ascii=False))
-                except Exception:
-                    # Fallback a representación simple si JSON falla
-                    lines = [f"{r[0]}: {r[1]} <{r[2]}>" for r in rows]
-                    return hello_pb2.UserReply(message='; '.join(lines))
-            else:
-                cur.execute("SELECT id, name, email FROM users WHERE id = %s", (request.id,))
-                row = cur.fetchone()
-                cur.close()
+            cur.execute("SELECT id, name, email FROM users WHERE id = %s", (request.id,))
+            row = cur.fetchone()
+            cur.close()
 
-                if row:
-                    return hello_pb2.UserReply(
-                        id=row[0],
-                        name=row[1],
-                        email=row[2],
-                        message="Usuario encontrado"
-                    )
-                else:
-                    return hello_pb2.UserReply(message="Usuario no encontrado")
+            if row:
+                user = hello_pb2.User(id=row[0], name=row[1], email=row[2])
+                return hello_pb2.UserReply(user=user, message="Usuario encontrado")
+            else:
+                return hello_pb2.UserReply(message="Usuario no encontrado")
         except Exception as e:
             return hello_pb2.UserReply(message=f"Error: {e}")
         finally:
             self._put_conn(conn)
 
-    def ListUsers(self, request, context):
-        """Listar todos los usuarios (ListUsers RPC)"""
+    def ListUsers(self, request: Empty, context):
+        """Listar todos los usuarios"""
         conn = self._get_conn()
         try:
             cur = conn.cursor()
@@ -109,12 +90,12 @@ class UserService(hello_pb2_grpc.UserServiceServicer):
             rows = cur.fetchall()
             cur.close()
 
-            users = [hello_pb2.UserReply(id=r[0], name=r[1], email=r[2]) for r in rows]
-            return hello_pb2.UsersList(users=users)
+            users = [hello_pb2.User(id=r[0], name=r[1], email=r[2]) for r in rows]
+            return hello_pb2.UsersReply(users=users)
         except Exception as e:
-            context.set_details(str(e))
+            context.set_details(f"Error: {e}")
             context.set_code(grpc.StatusCode.INTERNAL)
-            return hello_pb2.UsersList()
+            return hello_pb2.UsersReply()
         finally:
             self._put_conn(conn)
     
